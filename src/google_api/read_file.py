@@ -63,7 +63,6 @@ class GoogleSheets:
     def create_dataset(self, values):
         teams = {"team_name": values[1], "bases_name": join_bases(values[3], values[4], values[5], values[6]), "type": values[8], "date": values[7]}
         df_teams = pd.DataFrame(teams, columns=['team_name', 'bases_name', 'type', 'date'])
-        print(df_teams)
         return df_teams
 
     def get_teams(self, link):

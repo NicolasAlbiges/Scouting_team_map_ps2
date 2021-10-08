@@ -11,4 +11,7 @@ googleSheets = read_file.GoogleSheets()
 df_teams = googleSheets.get_teams(teams_url)
 scouting = scout.Scouting(df_teams)
 
-scouting.team_scrim_stats("1RPC")
+scouting.show_visualization_teams(["1RPC", "GOBS"])
+scouting.simulation_group_stage("1RPC", "GOBS")
+scouting.simulation_playin("1RPC", "GOBS")
+

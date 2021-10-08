@@ -1,66 +1,118 @@
 from __future__ import print_function
-import pickle
-import os.path
-import pandas as pd
-import matplotlib.pyplot as plt
-import ast
-import numpy as np
+from . import teams
+import sys
+from utils import utils
 
-
-def split_bases(bases):
-    clean_bases = []
-    for base in bases:
-        base = ast.literal_eval(base)
-        print(base)
-        clean_bases = clean_bases + base
-    return clean_bases
+sys.path.append("..")
 
 
 class Scouting:
     def __init__(self, df_teams):
         self.df_teams = df_teams
-        self.bases = ["Waterson", "Pale", "Peris", "Fort liberty", "Acan", "Kessel", "Bridgewater"]
-        self.teams_name = []
+        self.bases_name = ["Waterson", "Pale", "Peris", "Fort liberty", "Acan", "Kessel", "Bridgewater"]
+        self.teams_name = ["1RPC", "GOBS", "BYZZ", "xFPS", "GENX", "SDEM", "BWAE", "DTAC", "BACU", "HBG", "TRY"]
+        self.bases_count = {}
+        self.teams = []
+        self.teams_computing()
+        self.current_meta_map()
 
-    def team_scrim_stats(self, team_name):
-        self.df_teams = self.df_teams[self.df_teams.team_name == team_name]
-        df_teams_scrim = self.df_teams[self.df_teams.type == "Scrim"]
-        print(self.df_teams)
-        bases_played = split_bases(list(self.df_teams.bases_name.values))
-        bases_played_scrim = split_bases(list(df_teams_scrim.bases_name.values))
+    def teams_computing(self):
+        for team in self.teams_name:
+            team_obj = teams.Teams(self.df_teams, team)
+            # print(self.df_teams)
+            self.teams.append(team_obj)
 
-        self.visualization_bar_bases(bases_played, bases_played_scrim, team_name)
+    def show_visualization_teams(self, teams_name):
+        for team_obj in self.teams:
+            if team_obj.team_name in teams_name:
+                team_obj.visualization_bar_bases()
 
-    def visualization_bar_bases(self, bases, bases_played_scrim, team_name):
-        print("Bases played by " + team_name)
-        bases_nbr = []
-        for base in self.bases:
-            nbr = bases.count(base)
-            bases_nbr.append(nbr)
-        bases_scrim_nbr = []
-        for base in self.bases:
+    def current_meta_map(self):
+        print("\n----------- CURRENT META WITH MAP PLAYED BY EVERYONE (expect 1RPC) ------------------")
+        df_teams = self.df_teams[self.df_teams.team_name != "1RPC"]
+        df_teams_scrim = df_teams[df_teams.type == "Scrim"]
+
+        bases_played = utils.split_bases(list(df_teams.bases_name.values))
+        bases_played_scrim = utils.split_bases(list(df_teams_scrim.bases_name.values))
+
+        print("\nStats with Scrim + Internal : \n")
+        for base in self.bases_name:
+            nbr = bases_played.count(base)
+            print(base + " has been played : " + str(nbr) + " times")
+
+        print("\nStats with Scrim : \n")
+        for base in self.bases_name:
             nbr = bases_played_scrim.count(base)
-            bases_scrim_nbr.append(nbr)
+            print(base + " has been played : " + str(nbr) + " times")
 
-        print(bases_nbr)
-        print(bases_scrim_nbr)
+    def find_team_obj(self, team_name):
+        team_index = self.teams_name.index(team_name)
+        return self.teams[team_index]
 
-        x = np.arange(len(self.bases))
+    # TODO Smart ban, ban enney best map but also trying to ban a map you dont want to play
+    #  not banning your best map as well
+    def smart_ban(self, bases, team_bases_name, enemy_team_base, i, ct):
+        enemy_best_map = enemy_team_base[i]
+        return enemy_best_map
 
-        fig, ax = plt.subplots()
+    def simulation_group_stage_remove_bases(self, bases, team_bases_name, team_name):
+        for base in team_bases_name:
+            worst_map = base
+            if base in bases:
+                break
+        base_index = bases.index(worst_map)
+        bases.pop(base_index)
+        print(team_name + " BAN this map " + worst_map + "\n")
+        return bases
 
-        bar1 = ax.bar(x=(x - 0.3/2), height=bases_nbr, width=0.3, color='b', label="Internal + Scrim", align='edge', edgecolor='black')
-        bar2 = ax.bar(x=(x + 0.3/2), height=bases_scrim_nbr, width=0.3, color='r', label="Scrim", align='edge', edgecolor='black')
+    def smart_pick(self, bases, team_bases_name, enemy_team_base, i, ct):
+        best_map = team_bases_name[i]
+        if best_map in bases and best_map != enemy_team_base[ct]:
+            return best_map
+        elif i > len(team_bases_name):
+            return self.smart_pick(bases, team_bases_name, enemy_team_base, len(team_bases_name) - 1, ct - 1)
+        return self.smart_pick(bases, team_bases_name, enemy_team_base, i - 1, ct)
 
-        plt.xlabel("Bases")
-        plt.ylabel("Number of Scrims and Internals")
-        plt.title("Number of Scrim and Internal of " + team_name)
-        ax.set_xticks(x)
-        ax.set_xticklabels(self.bases)
-        ax.legend()
+    def simulation_group_stage_pick_bases(self, bases, team_bases_name, enemy_team_base, team_name):
+        best_map = self.smart_pick(bases, team_bases_name, enemy_team_base, len(team_bases_name) - 1, len(enemy_team_base) - 1)
+        base_index = bases.index(best_map)
+        bases.pop(base_index)
+        print(team_name + " PICK this map " + best_map + "\n")
+        return bases
 
-        ax.bar_label(bar1, padding=3)
-        ax.bar_label(bar2, padding=3)
+    def simulation_group_stage(self, team_name_winner_name, team_name_loser_name):
+        print("\n----------- SIMULATION GROUP STAGE STARTS ------------------\n")
+        team_winner = self.find_team_obj(team_name_winner_name)
+        team_loser = self.find_team_obj(team_name_loser_name)
 
-        fig.tight_layout()
-        plt.show()
+        bases = self.bases_name.copy()
+
+        bases = self.simulation_group_stage_remove_bases(bases, team_winner.sorted_base_name, team_name_winner_name)
+
+        bases = self.simulation_group_stage_remove_bases(bases, team_loser.sorted_base_name, team_name_loser_name)
+
+        bases = self.simulation_group_stage_remove_bases(bases, team_winner.sorted_base_name, team_name_winner_name)
+
+        bases = self.simulation_group_stage_remove_bases(bases, team_loser.sorted_base_name, team_name_loser_name)
+
+        print("\nThe remaining bases are :", bases)
+
+    def simulation_playin(self, team_name_winner_name, team_name_loser_name):
+        print("\n----------- SIMULATION PLAYINS STARTS ------------------\n")
+        team_winner = self.find_team_obj(team_name_winner_name)
+        team_loser = self.find_team_obj(team_name_loser_name)
+
+        bases = self.bases_name.copy()
+
+        bases = self.simulation_group_stage_remove_bases(bases, team_winner.sorted_base_name, team_name_winner_name)
+        bases = self.simulation_group_stage_remove_bases(bases, team_loser.sorted_base_name, team_name_loser_name)
+
+        bases = self.simulation_group_stage_pick_bases(bases, team_winner.sorted_base_name, team_loser.sorted_base_name, team_name_winner_name)
+        bases = self.simulation_group_stage_pick_bases(bases, team_loser.sorted_base_name, team_winner.sorted_base_name, team_name_loser_name)
+
+        bases = self.simulation_group_stage_remove_bases(bases, team_winner.sorted_base_name, team_name_winner_name)
+        bases = self.simulation_group_stage_remove_bases(bases, team_loser.sorted_base_name, team_name_loser_name)
+
+        print("The last base is :", bases)
+
+
